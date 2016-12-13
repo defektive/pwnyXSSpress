@@ -1518,9 +1518,9 @@ try{
 		case 'browse':
 			$client_id = isset($_REQUEST['client_id']) ? preg_replace("/[^0-9]/", '', $_REQUEST['client_id']) : false;
 			$client = new client($client_id);
-			$files = explode("\n", shell_exec("find data/ -name '*.html'"));
+			$files = explode("\n", shell_exec("find ".  USER_DIR ."pages/ -name '*.html'"));
 
-			if(empty($files)){
+			if(empty($files) || empty($files[0])){
 				$client->addCmd("pwny.fetchPage(window.location.pathname)");
 				print "<script>setTimeout('window.location=window.location', 1000)</script>";
 			} else {

